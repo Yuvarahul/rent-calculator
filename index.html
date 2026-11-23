@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rent Calculator</title>
+<style>
+:root{--bg:#eef1f6;--card:#fff;--ink:#1b2433;--mute:#5a6578;--line:#d6dce8;--acc:#3b4cca;--accsoft:#e3e7fb;--err:#b3261e;--onacc:#fff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#12151d;--card:#1b2030;--ink:#e8ecf6;--mute:#9aa6bd;--line:#2c3448;--acc:#8c99f5;--accsoft:#262d4d;--err:#ff8a80;--onacc:#12151d}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#12151d;--card:#1b2030;--ink:#e8ecf6;--mute:#9aa6bd;--line:#2c3448;--acc:#8c99f5;--accsoft:#262d4d;--err:#ff8a80;--onacc:#12151d}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;justify-content:center;padding:24px 14px 40px}
+main{width:100%;max-width:640px}
+h1{font:600 1.8rem/1.2 "Iowan Old Style",Georgia,serif;margin:0 0 4px}
+h2{font-size:1.05rem;margin:0 0 12px}
+p.sub{margin:0 0 18px;color:var(--mute)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
+label.f{display:block;font-size:.85rem;color:var(--mute);margin-bottom:4px}
+input[type=text],input[type=number],input[type=month],select{width:100%;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+input.bad{border-color:var(--err)}
+:is(input,select,button):focus-visible{outline:3px solid var(--acc);outline-offset:1px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.row .grow{flex:1;min-width:0}
+.row .amt{width:130px;flex:none}
+button{font:inherit;font-weight:600;padding:9px 14px;border-radius:8px;border:1px solid var(--acc);cursor:pointer;background:transparent;color:var(--acc)}
+button.p{background:var(--acc);color:var(--onacc)}
+button.x{padding:6px 10px;border-color:var(--line);color:var(--mute)}
+.exp{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.chip{display:flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-size:.88rem;cursor:pointer}
+.chip:has(input:checked){background:var(--accsoft);border-color:var(--acc)}
+.err{color:var(--err);margin:0 0 10px;font-size:.92rem}
+.pc{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+.pc .h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px}
+.pc .h b{font-size:1.05rem}
+.pc .h span{font:600 1.5rem/1 "Iowan Old Style",Georgia,serif;color:var(--acc)}
+.ln{display:flex;justify-content:space-between;color:var(--mute);font-size:.93rem;padding:2px 0}
+.num{font-variant-numeric:tabular-nums}
+.tot{display:flex;justify-content:space-between;background:var(--accsoft);border-radius:10px;padding:12px 14px;font-weight:600}
+.btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.note{font-size:.85rem;color:var(--mute);margin:10px 0 0}
+</style>
+</head>
+<body>
+<main>
+<h1>Rent calculator</h1>
+<p class="sub">Split rent, utility bills and shared costs between flatmates. Every amount adds up exactly.</p>
+
+<section class="card">
+<h2>Month and rent</h2>
+<div class="g2">
+<div><label class="f" for="mo">Month</label><input type="month" id="mo"></div>
+<div><label class="f" for="mode">Rent split</label>
+<select id="mode"><option value="equal">Split equally</option><option value="custom">Set each person’s rent</option></select></div>
+</div>
+<div id="rentbox" style="margin-top:10px"><label class="f" for="rent">Total monthly rent (₹)</label><input type="number" id="rent" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+</section>
+
+<section class="card">
+<h2>Flatmates</h2>
+<div id="mem"></div>
+<button type="button" id="addm">Add flatmate</button>
+</section>
+
+<section class="card">
+<h2>Utilities and shared expenses</h2>
+<div id="exps"></div>
+<button type="button" id="adde">Add expense</button>
+<p class="note">Untick a flatmate to leave them out of an expense, for example if someone doesn’t use the internet.</p>
+</section>
+
+<section class="card">
+<h2>Who pays what</h2>
+<div id="err"></div>
+<div id="res"></div>
+<div class="btns" id="acts">
+<button type="button" class="p" id="csv">Download CSV</button>
+<button type="button" id="txt">Download summary (.txt)</button>
+</div>
+</section>
+</main>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+var KEY="rent-calculator-v1", uid=100;
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function today(){var d=new Date();return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)}
+function defaults(){
+  var ms=[{id:1,name:"Flatmate 1",rent:""},{id:2,name:"Flatmate 2",rent:""},{id:3,name:"Flatmate 3",rent:""}],all=[1,2,3];
+  return {month:today(),mode:"equal",rent:"",members:ms,expenses:[
+    {id:11,name:"Electricity",amount:"",shared:all.slice()},
+    {id:12,name:"Water",amount:"",shared:all.slice()},
+    {id:13,name:"Internet",amount:"",shared:all.slice()}]};
+}
+var S;
+try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){S=null}
+if(!S||!S.members||!S.expenses)S=defaults();
+S.members.concat(S.expenses).forEach(function(o){if(o.id>=uid)uid=o.id+1});
+
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function badNum(v){v=String(v).trim();return v!==""&&!(isFinite(parseFloat(v))&&parseFloat(v)>=0)}
+function P(v){var n=parseFloat(v);return isFinite(n)&&n>=0?Math.round(n*100):0} // paise
+function fmt(p){return "₹"+(p/100).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2})}
+function plain(p){return (p/100).toFixed(2)}
+// Split total (in paise) across ids so the shares add up exactly; leftover paise rotate by offset
+function split(total,ids,off){
+  var n=ids.length,b=Math.floor(total/n),r=total-b*n,out={};
+  ids.forEach(function(id,i){var k=((i-off)%n+n)%n;out[id]=b+(k<r?1:0)});
+  return out;
+}
+function nm(m,i){return m.name.trim()||"Flatmate "+(i+1)}
+
+function build(){
+  $("mo").value=S.month; $("mode").value=S.mode; $("rent").value=S.rent;
+  $("rentbox").style.display=S.mode==="equal"?"block":"none";
+  $("mem").innerHTML=S.members.map(function(m,i){
+    return '<div class="row"><input type="text" class="grow" data-m="'+m.id+'" data-k="name" value="'+esc(m.name)+'" aria-label="Flatmate '+(i+1)+' name">'+
+    (S.mode==="custom"?'<input type="number" class="amt" min="0" step="0.01" inputmode="decimal" placeholder="Rent ₹" data-m="'+m.id+'" data-k="rent" value="'+esc(m.rent)+'" aria-label="Rent for '+esc(nm(m,i))+'">':"")+
+    '<button type="button" class="x" data-rm="'+m.id+'" aria-label="Remove '+esc(nm(m,i))+'">Remove</button></div>';
+  }).join("");
+  $("exps").innerHTML=S.expenses.map(function(e){
+    return '<div class="exp"><div class="row"><input type="text" class="grow" data-e="'+e.id+'" data-k="name" value="'+esc(e.name)+'" aria-label="Expense name">'+
+    '<input type="number" class="amt" min="0" step="0.01" inputmode="decimal" placeholder="₹ amount" data-e="'+e.id+'" data-k="amount" value="'+esc(e.amount)+'" aria-label="Amount for '+esc(e.name)+'">'+
+    '<button type="button" class="x" data-re="'+e.id+'" aria-label="Remove '+esc(e.name)+'">Remove</button></div>'+
+    '<div class="chips">'+S.members.map(function(m,i){
+      return '<label class="chip"><input type="checkbox" data-s="'+e.id+':'+m.id+'"'+(e.shared.indexOf(m.id)>-1?" checked":"")+'>'+esc(nm(m,i))+'</label>';
+    }).join("")+'</div></div>';
+  }).join("")||'<p class="note">No expenses yet. Add one below.</p>';
+  calc();
+}
+
+var R=null; // last computed result for export
+function calc(){
+  save();
+  var errs=[],M=S.members;
+  if(!M.length){errs.push("Add at least one flatmate.")}
+  if(badNum(S.rent))errs.push("Total rent must be a number of 0 or more.");
+  M.forEach(function(m,i){if(S.mode==="custom"&&badNum(m.rent))errs.push("Rent for "+nm(m,i)+" must be a number of 0 or more.")});
+  S.expenses.forEach(function(e){
+    var n=e.name.trim()||"Unnamed expense";
+    if(badNum(e.amount))errs.push(n+": amount must be a number of 0 or more.");
+    else if(P(e.amount)>0&&!e.shared.some(function(id){return M.some(function(m){return m.id===id})}))errs.push(n+": choose at least one flatmate to share it.");
+  });
+  $("err").innerHTML=errs.map(function(t){return '<p class="err" role="alert">'+esc(t)+"</p>"}).join("");
+  $("acts").style.display=errs.length?"none":"flex";
+  if(errs.length){$("res").innerHTML="";R=null;return}
+
+  var ids=M.map(function(m){return m.id});
+  var lines={},total={};
+  M.forEach(function(m){lines[m.id]=[];total[m.id]=0});
+  var rentSplit=S.mode==="equal"?split(P(S.rent),ids,0):null;
+  M.forEach(function(m){
+    var a=rentSplit?rentSplit[m.id]:P(m.rent);
+    lines[m.id].push({label:"Rent",amt:a});total[m.id]+=a;
+  });
+  var cols=["Rent"];
+  S.expenses.forEach(function(e,idx){
+    var amt=P(e.amount); if(!amt)return;
+    var who=ids.filter(function(id){return e.shared.indexOf(id)>-1});
+    var sh=split(amt,who,idx), label=e.name.trim()||"Expense";
+    cols.push(label);
+    M.forEach(function(m){var a=sh[m.id]||0;lines[m.id].push({label:label,amt:a});total[m.id]+=a});
+  });
+  var grand=ids.reduce(function(s,id){return s+total[id]},0);
+  var h="";
+  M.forEach(function(m,i){
+    h+='<div class="pc"><div class="h"><b>'+esc(nm(m,i))+'</b><span class="num">'+fmt(total[m.id])+'</span></div>'+
+    lines[m.id].map(function(l){return '<div class="ln"><span>'+esc(l.label)+'</span><span class="num">'+fmt(l.amt)+"</span></div>"}).join("")+"</div>";
+  });
+  h+='<div class="tot"><span>Total for the house</span><span class="num">'+fmt(grand)+"</span></div>";
+  $("res").innerHTML=h;
+  R={cols:cols,M:M,lines:lines,total:total,grand:grand};
+}
+
+function monthLabel(){
+  var p=(S.month||today()).split("-");
+  return new Date(+p[0],+p[1]-1,1).toLocaleString("en-IN",{month:"long",year:"numeric"});
+}
+function csvCell(s){s=String(s);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+function makeCSV(){
+  var rows=[["Member"].concat(R.cols,["Total"])],colTot=R.cols.map(function(){return 0});
+  R.M.forEach(function(m,i){
+    var r=[nm(m,i)];
+    R.lines[m.id].forEach(function(l,j){r.push(plain(l.amt));colTot[j]+=l.amt});
+    r.push(plain(R.total[m.id]));rows.push(r);
+  });
+  rows.push(["Total"].concat(colTot.map(plain),[plain(R.grand)]));
+  return "\ufeff"+rows.map(function(r){return r.map(csvCell).join(",")}).join("\r\n")+"\r\n";
+}
+function makeTXT(){
+  var t="Rent summary: "+monthLabel()+"\n"+"=".repeat(32)+"\n\n";
+  R.M.forEach(function(m,i){
+    t+=nm(m,i)+": "+fmt(R.total[m.id])+"\n";
+    R.lines[m.id].forEach(function(l){t+="  "+l.label+": "+fmt(l.amt)+"\n"});
+    t+="\n";
+  });
+  return t+"Total for the house: "+fmt(R.grand)+"\n";
+}
+async function saveFile(name,text,mime){
+  try{
+    if(window.claude&&window.claude.use){var d=await window.claude.use("downloads");if(d){await d.save({filename:name,data:text});return}}
+  }catch(e){if(e&&e.code==="declined")return}
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([text],{type:mime}));a.download=name;
+  document.body.appendChild(a);a.click();a.remove();
+}
+function slug(){return (S.month||today())}
+
+// events
+$("mo").addEventListener("input",function(){S.month=this.value;save()});
+$("mode").addEventListener("change",function(){S.mode=this.value;build()});
+$("rent").addEventListener("input",function(){S.rent=this.value;this.classList.toggle("bad",badNum(this.value));calc()});
+$("addm").addEventListener("click",function(){
+  var id=uid++;S.members.push({id:id,name:"Flatmate "+(S.members.length+1),rent:""});
+  S.expenses.forEach(function(e){e.shared.push(id)});build();
+});
+$("adde").addEventListener("click",function(){
+  S.expenses.push({id:uid++,name:"",amount:"",shared:S.members.map(function(m){return m.id})});build();
+  var ins=$("exps").querySelectorAll('input[data-k="name"]');ins[ins.length-1].focus();
+});
+$("mem").addEventListener("input",function(ev){
+  var t=ev.target,id=+t.getAttribute("data-m");if(!id)return;
+  var m=S.members.filter(function(x){return x.id===id})[0],k=t.getAttribute("data-k");
+  m[k]=t.value;if(k==="rent")t.classList.toggle("bad",badNum(t.value));calc();
+});
+$("mem").addEventListener("focusout",function(ev){if(ev.target.getAttribute("data-k")==="name")build()});
+$("mem").addEventListener("click",function(ev){
+  var id=+ev.target.getAttribute("data-rm");if(!id)return;
+  S.members=S.members.filter(function(m){return m.id!==id});
+  S.expenses.forEach(function(e){e.shared=e.shared.filter(function(x){return x!==id})});build();
+});
+$("exps").addEventListener("input",function(ev){
+  var t=ev.target,id=+t.getAttribute("data-e");if(!id)return;
+  var e=S.expenses.filter(function(x){return x.id===id})[0],k=t.getAttribute("data-k");
+  e[k]=t.value;if(k==="amount")t.classList.toggle("bad",badNum(t.value));calc();
+});
+$("exps").addEventListener("change",function(ev){
+  var s=ev.target.getAttribute("data-s");if(!s)return;
+  var p=s.split(":"),e=S.expenses.filter(function(x){return x.id===+p[0]})[0],mid=+p[1];
+  e.shared=e.shared.filter(function(x){return x!==mid});
+  if(ev.target.checked)e.shared.push(mid);calc();
+});
+$("exps").addEventListener("click",function(ev){
+  var id=+ev.target.getAttribute("data-re");if(!id)return;
+  S.expenses=S.expenses.filter(function(e){return e.id!==id});build();
+});
+$("csv").addEventListener("click",function(){if(R)saveFile("rent-summary-"+slug()+".csv",makeCSV(),"text/csv")});
+$("txt").addEventListener("click",function(){if(R)saveFile("rent-summary-"+slug()+".txt",makeTXT(),"text/plain")});
+
+build();
+})();
+</script>
+</body>
+</html>
